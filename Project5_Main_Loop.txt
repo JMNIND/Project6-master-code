@@ -1,0 +1,88 @@
+	// Put status = 0 to get a single char from the keypad press
+	Status = 0;
+	P1IE |= 0xF;
+
+    Unlocked_ASCII_ptr = "\a";
+    Send_I2C_Message(0x058, Unlocked_ASCII_ptr);
+	while (1)
+	{
+
+		Sample_Size = 0;
+		int k;
+		for (k = 20000; k > 0; k--)
+			if (Sample_Size == 0)
+			{
+		        snprintf(UART_Message_Global, 100, "Please enter number of samples... n = ");
+		        Send_UART_Message(38);
+				while (1)
+				{
+					// Do nothing
+
+					if (New_Input == 1)
+					{
+						// If keypad pressed...
+
+						*Unlocked_ASCII_ptr = Decode_Input(Unlocked_Input);
+						sscanf(Unlocked_ASCII_ptr, "%d", &Sample_Size);
+						Send_I2C_Message(0x048, Unlocked_ASCII_ptr, 1);
+						for (k = 20000; k > 0; k--)
+						{
+						} // Delay loop for I2C gets weird with the interrupts if not waiting for sometime.
+						snprintf(UART_Message_Global, 100, "%d\n\r", Sample_Size);
+						Send_UART_Message(3);
+						for (k = 0; k <= 10000; k++)
+						{
+						} // Delay loop for UART gets weird with the interrupts if not waiting for sometime.
+						P6OUT |= BIT6;
+						New_Input = 0;
+						break;
+					}
+				}
+			}
+			else if (Sample_Size != 0)
+			{
+				P1IE |= 0xF;
+				New_Input = 0;
+				TB0CTL |= MC__UP; // Put timer into UP mode for testing.
+				int j;
+				while (1)
+				{
+					if (Fresh_Data == 1)
+					{
+						Fresh_Data = 0;
+						Process_Temperature_Data(Raw_Temp);
+						for (j = 0; j < 10000; j++)
+						{
+						}
+					}
+					if (New_Input == 1)
+					{
+						*Unlocked_ASCII_ptr = Decode_Input(Unlocked_Input);
+						if (*Unlocked_ASCII_ptr == 'A' | 'B' | 'C' | 'D')
+						{
+							Send_I2C_Message(0x058, Unlocked_ASCII_ptr, 1);
+							snprintf(UART_Message_Global, 100, "LED Mode %c Selected. \n \r", Unlocked_ASCII);
+							Send_UART_Message(23);
+						}
+						if (*Unlocked_ASCII_ptr == '#')
+						{
+							Send_I2C_Message(0x058, Unlocked_ASCII_ptr, 1);
+							Send_I2C_Message(0x048, Unlocked_ASCII_ptr, 1);
+							snprintf(UART_Message_Global, 100, "System Reset. \n\r");
+							Send_UART_Message(16);
+							break;
+						}
+						else
+						{
+						}
+						New_Input = 0;
+					}
+					else
+					{
+					}
+				}
+			}
+	}
+
+	return 0;
+}
