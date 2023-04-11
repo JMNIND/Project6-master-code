@@ -2,6 +2,7 @@
 
 //Setting up timers to trigger the .333 second analog read in 
 
+//NEEDS UPDATED TO TRIGGER TIMER EVERY .5 SECONDS  
 
 void Setup_TimerB0_A2D(void){
     /*

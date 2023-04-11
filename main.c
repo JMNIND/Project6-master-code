@@ -165,7 +165,7 @@ int main(void)
 	// The system can sit in either the Locked_Status or the Unlocked_Status infinately.
 	// Testing to make sure the program reaches the main loop setting the P6.6 LED on
 	P6DIR |= Test_LED;
-
+	//Now we need to collect the inputs from the keypad....
 }
 
 /* reverse:  reverse string s in place */
@@ -310,6 +310,7 @@ Interrupt Service Routines
 
 // I2C Transmit intterupt vector
 // Used to send data out the master
+//TODO UPDATE CODE TO RECIEVE DATA FROM RTC AND TEMP_SENSOR
 #pragma vector = EUSCI_B1_VECTOR
 __interrupt void EUSCI_B1_I2C_ISR(void)
 {
