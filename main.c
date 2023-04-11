@@ -4,10 +4,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define LM19_PIN BIT0
+
 #define third_second_timer_period 333333
 
+#define LCD 0x048
+#define LED 0x058
+#define RTC 0x068
+#define Temp_Sensor 0x012
+#define LM19_PIN BIT0	//Connected on pin 5.0
+
 #define Test_LED BIT6
+
+#define max_I2C_Length 32
+#define max_UART_Length 64
 
 void Setup_I2C_Module(void);
 void Send_I2C_Message(int, char *, int);
@@ -16,7 +25,7 @@ char Decode_Input(int);
 
 // Global Variables needed for I2C communication
 int I2C_Message_Counter = 0; // Index value to count the position in the message being written out I2C
-char I2C_Message_Global[32]; // Create an empty "string" to hold the final message as it is being sent out I2C
+char I2C_Message_Global[max_I2C_Length]; // Create an empty "string" to hold the final message as it is being sent out I2C
 
 // UART Function Prototypes
 void Setup_UART(void);
@@ -30,7 +39,7 @@ int position;
 */
 
 // UART Global Variables
-char UART_Message_Global[64];
+char UART_Message_Global[max_UART_Length];
 char *UART_Message_ptr = UART_Message_Global;
 unsigned int UART_Position_Counter;
 int UART_Message_Length;
@@ -78,30 +87,18 @@ char *Rolling_Average_ASCII_ptr = Rolling_Average_ASCII;
 float Real_Analog_Value;
 int Sample_Size = 0;
 int Rolling_Average_Unlocked = 0;
-/*
-
- Gary's A2D variables
- These will need changed a bit to make them work with the multi-file structure probably.
-*/
-
-int sum = 0;		   // sum of the last three samples
-int valid_samples = 0; // number of valid samples
-int window_size = 0;   // size of the averaging window
-int window_index = 0;  // index of the current sample in the window
-int window_full = 0;   // flag indicating whether the window is full
-int samples[10];	   // array to store the last n samples
-int Fresh_Data = 0;
-
 int Raw_Temp = 0;
 
 // End A2D variables.
 // Keypad/Locked code globals
+/*
 int Passcode_Inputs[5] = {0, 0, 0, 0, 0}; // Three digit passcode, the last value holds the locked state
 int Input_Counter = 0;
 int Temp_In[2] = {0, 0};
 int Status = 1;
 char Input_Arr[3] = {0, 0, 0};
 int New_Input = 0;
+*/
 
 // Keypad functions prototypes
 
@@ -112,6 +109,7 @@ int Locked_Status(void);
 int Unlocked_Status(void);
 
 // Program flow globals
+//This is depreciated and needs revised.
 char Locked_Code[1];
 char *Locked_Code_ptr = Locked_Code;
 char Unlocked_ASCII[1];
@@ -130,9 +128,12 @@ Written 03/27/23 Last Revision 03/27/23 by Drew.
 int main(void)
 {
 	WDTCTL = WDTPW | WDTHOLD; // stop watchdog timer
+	/*
 	// Using some simple IO to debug
 	P6DIR |= BIT6;
 	P6OUT &= ~BIT6;
+	*/
+
 
 	// Need to create a simple I2C transmission protocol
 
@@ -165,93 +166,6 @@ int main(void)
 	// Testing to make sure the program reaches the main loop setting the P6.6 LED on
 	P6DIR |= Test_LED;
 
-	// Put status = 0 to get a single char from the keypad press
-	Status = 0;
-	P1IE |= 0xF;
-
-    Unlocked_ASCII_ptr = "\a";
-    Send_I2C_Message(0x058, Unlocked_ASCII_ptr);
-	while (1)
-	{
-
-		Sample_Size = 0;
-		int k;
-		for (k = 20000; k > 0; k--)
-			if (Sample_Size == 0)
-			{
-		        snprintf(UART_Message_Global, 100, "Please enter number of samples... n = ");
-		        Send_UART_Message(38);
-				while (1)
-				{
-					// Do nothing
-
-					if (New_Input == 1)
-					{
-						// If keypad pressed...
-
-						*Unlocked_ASCII_ptr = Decode_Input(Unlocked_Input);
-						sscanf(Unlocked_ASCII_ptr, "%d", &Sample_Size);
-						Send_I2C_Message(0x048, Unlocked_ASCII_ptr, 1);
-						for (k = 20000; k > 0; k--)
-						{
-						} // Delay loop for I2C gets weird with the interrupts if not waiting for sometime.
-						snprintf(UART_Message_Global, 100, "%d\n\r", Sample_Size);
-						Send_UART_Message(3);
-						for (k = 0; k <= 10000; k++)
-						{
-						} // Delay loop for UART gets weird with the interrupts if not waiting for sometime.
-						P6OUT |= BIT6;
-						New_Input = 0;
-						break;
-					}
-				}
-			}
-			else if (Sample_Size != 0)
-			{
-				P1IE |= 0xF;
-				New_Input = 0;
-				TB0CTL |= MC__UP; // Put timer into UP mode for testing.
-				int j;
-				while (1)
-				{
-					if (Fresh_Data == 1)
-					{
-						Fresh_Data = 0;
-						Process_Temperature_Data(Raw_Temp);
-						for (j = 0; j < 10000; j++)
-						{
-						}
-					}
-					if (New_Input == 1)
-					{
-						*Unlocked_ASCII_ptr = Decode_Input(Unlocked_Input);
-						if (*Unlocked_ASCII_ptr == 'A' | 'B' | 'C' | 'D')
-						{
-							Send_I2C_Message(0x058, Unlocked_ASCII_ptr, 1);
-							snprintf(UART_Message_Global, 100, "LED Mode %c Selected. \n \r", Unlocked_ASCII);
-							Send_UART_Message(23);
-						}
-						if (*Unlocked_ASCII_ptr == '#')
-						{
-							Send_I2C_Message(0x058, Unlocked_ASCII_ptr, 1);
-							Send_I2C_Message(0x048, Unlocked_ASCII_ptr, 1);
-							snprintf(UART_Message_Global, 100, "System Reset. \n\r");
-							Send_UART_Message(16);
-							break;
-						}
-						else
-						{
-						}
-						New_Input = 0;
-					}
-					else
-					{
-					}
-				}
-			}
-	}
-
-	return 0;
 }
 
 /* reverse:  reverse string s in place */
