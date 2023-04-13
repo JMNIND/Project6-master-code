@@ -133,7 +133,7 @@ int main(void)
 	P6DIR |= BIT6;
 	P6OUT &= ~BIT6;
 	*/
-
+	Set_RTC();
 
 	// Need to create a simple I2C transmission protocol
 
@@ -151,21 +151,21 @@ int main(void)
 	PM5CTL0 &= ~LOCKLPM5;
 	__enable_interrupt();
 
-	/*/
-	//Now to create a loop that tests sending a single character out using the Send_I2C_Message
-	Send_I2C_Message(Test_Char_ptr, Test_Slave_Address);
-	while(1){
-		//Set LED to indicate that it finished
-		P6OUT ^= BIT6;
-		int i;
-		for(i = 10000; i > 0; i--){}
-	}
+	/*
+	1. Get resolution from user
+	2. Begin collecting temperature data from the LN19 analog temp sensor every .5s
+	3. Begin collecting temperature data from the LM92 I2C temp sensor          .5s
+	4. Get time from the RTC every 												 1s
+		-Note the timing on all of these functions is incredibly tight and the system 
+			must be written very effeciently. 
+	5. Create the logic for temperature matching when 'C' is selected. 
+		-This will not be PID.
+		-Collecting data from the peltier and analog sensor, the system will check if the value is
+			greater than or less than ambient then make the decision to heat or cool.
+	6. Add the I2C communication to the slaves to write out the current information.
 	*/
-	// Below is an ifinate loop of going from locked -> unlocked -> locked -> ... based on user inputs.
-	// The system can sit in either the Locked_Status or the Unlocked_Status infinately.
-	// Testing to make sure the program reaches the main loop setting the P6.6 LED on
-	P6DIR |= Test_LED;
-	//Now we need to collect the inputs from the keypad....
+
+
 }
 
 /* reverse:  reverse string s in place */
@@ -323,105 +323,7 @@ __interrupt void EUSCI_B1_I2C_ISR(void)
 #pragma vector = PORT1_VECTOR
 __interrupt void ISR_Keypad_Pressed(void)
 {
-	switch (Status)
-	{
-
-	case 1:
-
-		Temp_In[0] = P1IN;
-		P6OUT |= BIT6;
-		// Switch to P1 as output, and P2 as input
-
-		// Set P1.0->P1.3 as Outputs
-		P1DIR |= 0xFF;
-		P1REN |= 0xFF;
-		P1OUT |= 0xFF;
-		// Set P2.0->P2.3 as Outputs
-		P2DIR &= ~0xFF;
-		P2REN |= 0xFF;
-		P2OUT &= ~0xFF;
-
-		P2IN &= ~0xFF;
-		P1IFG &= ~0xFF; // Clear P1 IFG
-
-		Temp_In[1] = P2IN;
-		// Rotate the upper nibble
-		Temp_In[0] = Temp_In[0] << 4;
-
-		Passcode_Inputs[Input_Counter] = Temp_In[0] | Temp_In[1];
-		Input_Counter++;
-		if (Input_Counter == 3)
-		{
-			Input_Counter = 0;
-			Passcode_Inputs[4] = 1;
-		}
-		Passcode_Inputs[3] = 1;
-		// Switch to P1 as output, and P2 as input
-
-		// Set P1.0->P1.3 as inputs
-		P1DIR &= ~0xFF;
-		P1REN |= 0xFF;
-		P1OUT &= ~0xFF;
-		// Set P2.0->P2.3 as Outputs
-		P2DIR |= 0xFF;
-		P2REN &= 0xFF;
-		P2OUT |= 0xFF;
-
-		// Enable P1.0->P1.3 Interrupts
-		P1IN &= ~0xFF;
-		P1IFG &= ~0xFF;
-		P2IFG &= ~0xFF; // Clear P2 IFG
-
-		P1IE &= ~0xFF;
-		break;
-
-	case 0: // This is used for when we want to get just a single input
-
-		Temp_In[0] = P1IN;
-		P6OUT |= BIT6;
-		// Switch to P1 as output, and P2 as input
-
-		// Set P1.0->P1.3 as Outputs
-		P1DIR |= 0xFF;
-		P1REN |= 0xFF;
-		P1OUT |= 0xFF;
-		// Set P2.0->P2.3 as Outputs
-		P2DIR &= ~0xFF;
-		P2REN |= 0xFF;
-		P2OUT &= ~0xFF;
-
-		P2IN &= ~0xFF;
-		P1IFG &= ~0xFF; // Clear P1 IFG
-
-		Temp_In[1] = P2IN;
-		// Rotate the upper nibble
-		Temp_In[0] = Temp_In[0] << 4;
-
-		Unlocked_Input = Temp_In[0] | Temp_In[1];
-
-		Passcode_Inputs[3] = 1;
-		// Switch to P1 as output, and P2 as input
-
-		// Set P1.0->P1.3 as inputs
-		P1DIR &= ~0xFF;
-		P1REN |= 0xFF;
-		P1OUT &= ~0xFF;
-		// Set P2.0->P2.3 as Outputs
-		P2DIR |= 0xFF;
-		P2REN &= 0xFF;
-		P2OUT |= 0xFF;
-
-		// Enable P1.0->P1.3 Interrupts
-		P1IN &= ~0xFF;
-		P1IFG &= ~0xFF;
-		P2IFG &= ~0xFF; // Clear P2 IFG
-
-		P1IE &= ~0xFF;
-		New_Input = 1;
-		break;
-
-	default:
-	}
+	
 }
 
 // Analog to Digital interrupt triggered by Timer A1
@@ -430,48 +332,13 @@ __interrupt void Sample_Timer(void)
 {
 
 	// TB0CTL |= MC__STOP;
-	float voltage = 0;
-	float temperature = 0;
-	float average = 0;
 
 	// Clear timer interrupt flag
 	TB0CCTL0 &= ~CCIFG;
-
-	int window_index = 0; // index of the current sample in the window
-	int window_full = 0;  // flag indicating whether the window is full
-	int samples[10];	  // array to store the last n samples
-
 	// read LM19 sensor and convert to temperature
 	ADCCTL0 |= ADCENC | ADCSC;
-	while (ADCCTL1 & ADCBUSY)
-		;
+	while (ADCCTL1 & ADCBUSY);
 	Raw_Temp = ADCMEM0;
 	Fresh_Data = 1;
-	P6OUT ^= Test_LED;
 
-	/* This doesn't work...See temperature.c for updated code
-	//Below is the conversion of the values brought in
-		voltage = (float)Raw_Temp; //* 3.3 / 1024.0;
-		temperature = -1481.96+ sqrt((2.1962*pow(10,6)+(1.8639-(voltage)/(3.8*pow(10,-6))))); // Calculate temperature
-
-
-		 // update circular buffer and averaging calculation
-		samples[window_index] = temperature;
-		if (valid_samples < window_size) {
-			sum += temperature;
-			valid_samples++;
-		} else {
-			sum = sum + temperature - samples[(window_index + 1) % window_size];
-		}
-		window_index = (window_index + 1) % window_size;
-		window_full = (window_full || (window_index == 0));
-
-
-		// calculate and display moving average temperature
-		if (valid_samples == window_size) {
-			average = (float)sum / window_size;
-			//printf("Average temperature: %.1f C\n", average);
-		}
-		*/
-	// End of the math section.
 }

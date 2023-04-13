@@ -1,0 +1,87 @@
+void Process_Temperature_Data(int New_Temp_Value)
+{
+	// Now we have an array of Temperature structs which we can begin to populate??? And then feed these temperature structs into Gary's struct to hold the rolling average
+	char buffer[20];
+	Temperature_Array[Sample_Number].Raw_Value = New_Temp_Value;
+	New_Temp_Value = 0; // Move the new raw value into the struct then clear the new raw value
+	// Now to convert from mV to degrees C
+	Real_Analog_Value = Temperature_Array[Sample_Number].Raw_Value * 830e-6;
+	Temperature_Array[Sample_Number].Celsius_Float = Convert_to_Celsius(Real_Analog_Value);
+	int whole_num = (int)Temperature_Array[Sample_Number].Celsius_Float;
+	int frac_num = (int)((Temperature_Array[Sample_Number].Celsius_Float - whole_num) * 100); // multiply by 100 to get 2 decimal places
+
+	// Convert int to char then move into struct
+	// Using itoa
+	itoa(whole_num, buffer);
+	Temperature_Array[Sample_Number].Upper_Bit[0] = buffer[0];
+	Temperature_Array[Sample_Number].Upper_Bit[1] = buffer[1];
+
+	itoa(frac_num, buffer);
+	Temperature_Array[Sample_Number].Lower_Bit = buffer[0];
+	// Move everything into the struct
+
+	// Convert to the kelvin equivalent
+	float Kelvin_Value = Temperature_Array[Sample_Number].Celsius_Float + 273.15;
+
+	// whole_num = (int) Kelvin_Value;
+	// itoa(whole_num, buffer);
+	itoa((int)Kelvin_Value, Temperature_Array[Sample_Number].Kelvin);
+	// snprintf(Temperature_Array[Sample_Number].Kelvin, 4, "%d", Kelvin_Value);
+	// End of the processing of the value.
+
+	if (Sample_Number == Sample_Size - 1)
+	{
+		Rolling_Average_Unlocked = 1;
+	}
+    //snprintf(UART_Message_Global, 100, "Current temperature Celsius temperature is: %c%c.%c. \n\r", Temperature_Array[Sample_Number].Upper_Bit[0], Temperature_Array[Sample_Number].Upper_Bit[1], Temperature_Array[Sample_Number].Lower_Bit);
+    //Send_UART_Message(40);
+	if (Rolling_Average_Unlocked == 1)
+	{
+		// TODO add average here.... DONE??
+	    TB0CTL |= MC__STOP;                      //Put timer into stop mode, change after sample size collected
+
+		int i;
+		Rolling_Average = 0;
+		for (i = 0; i <= Sample_Size - 1; i++)
+		{
+			Rolling_Average = Temperature_Array[i].Celsius_Float + Rolling_Average;
+		}
+
+		Rolling_Average = Rolling_Average / Sample_Size;
+		int whole_num = (int)Rolling_Average;
+		int frac_num = (int)((Rolling_Average - whole_num) * 100); // multiply by 100 to get 2 decimal places
+		itoa(whole_num, buffer);
+		Rolling_Average_ASCII[0] = buffer[0];
+		Rolling_Average_ASCII[1] = buffer[1];
+		itoa(frac_num, buffer);
+		Rolling_Average_ASCII[2] = buffer[0];
+
+		// TODO create snprintf like below with average.
+		// snprintf(Temperature_Write_Out, 100, "%c%c.%c\n%c%c%c\n%c%c.%c\n", Temperature_Array[Sample_Number].Upper_Bit[0], Temperature_Array[Sample_Number].Upper_Bit[1], Temperature_Array[Sample_Number].Lower_Bit, Temperature_Array[Sample_Number].Kelvin[0], Temperature_Array[Sample_Number].Kelvin[1], Temperature_Array[Sample_Number].Kelvin[2], Rolling_Average_ASCII[0], Rolling_Average_ASCII[1], Rolling_Average_ASCII[2]);
+		snprintf(Temperature_Write_Out, 100, "%c%c.%c\n%c%c%c\n", Rolling_Average_ASCII[0], Rolling_Average_ASCII[1], Rolling_Average_ASCII[2], Temperature_Array[Sample_Number].Kelvin[0], Temperature_Array[Sample_Number].Kelvin[1], Temperature_Array[Sample_Number].Kelvin[2]);
+		Send_I2C_Message(0x048, Temperature_Write_Out_ptr, 8);
+		snprintf(UART_Message_Global, 100, "Current Average Temperature %c%c.%c %cC and %c%c%c %cK. \n\r", Rolling_Average_ASCII[0], Rolling_Average_ASCII[1], Rolling_Average_ASCII[2], 248, Temperature_Array[Sample_Number].Kelvin[0], Temperature_Array[Sample_Number].Kelvin[1], Temperature_Array[Sample_Number].Kelvin[2], 248);
+		Send_UART_Message(49);
+		// Increment sample number
+
+		Sample_Number = 0;
+	}
+	// Create string of values if samples has not reached the threshold without the average
+	// snprintf(Temperature_Write_Out, 100, "%c%c.%c%c%c%c\n", Temperature_Array[Sample_Number].Upper_Bit[0], Temperature_Array[Sample_Number].Upper_Bit[1], Temperature_Array[Sample_Number].Lower_Bit, Temperature_Array[Sample_Number].Kelvin[0], Temperature_Array[Sample_Number].Kelvin[1], Temperature_Array[Sample_Number].Kelvin[2]);
+	// Send_I2C_Message(0x048, Temperature_Write_Out_ptr);
+	if (Sample_Number == Sample_Size - 1)
+	{
+		Sample_Number = 0;
+	}
+	else
+	{
+		Sample_Number = Sample_Number + 1;
+	}
+}
+
+float Convert_to_Celsius(float V0)
+{
+	float Celsius = 0;
+	Celsius = -1481.6 + sqrt(2.1962e6 + ((1.8639 - V0) / (3.88e-6)));
+	return (Celsius);
+}
