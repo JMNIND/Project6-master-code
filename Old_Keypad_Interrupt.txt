@@ -1,0 +1,99 @@
+switch (Status)
+	{
+
+	case 1:
+
+		Temp_In[0] = P1IN;
+		P6OUT |= BIT6;
+		// Switch to P1 as output, and P2 as input
+
+		// Set P1.0->P1.3 as Outputs
+		P1DIR |= 0xFF;
+		P1REN |= 0xFF;
+		P1OUT |= 0xFF;
+		// Set P2.0->P2.3 as Outputs
+		P2DIR &= ~0xFF;
+		P2REN |= 0xFF;
+		P2OUT &= ~0xFF;
+
+		P2IN &= ~0xFF;
+		P1IFG &= ~0xFF; // Clear P1 IFG
+
+		Temp_In[1] = P2IN;
+		// Rotate the upper nibble
+		Temp_In[0] = Temp_In[0] << 4;
+
+		Passcode_Inputs[Input_Counter] = Temp_In[0] | Temp_In[1];
+		Input_Counter++;
+		if (Input_Counter == 3)
+		{
+			Input_Counter = 0;
+			Passcode_Inputs[4] = 1;
+		}
+		Passcode_Inputs[3] = 1;
+		// Switch to P1 as output, and P2 as input
+
+		// Set P1.0->P1.3 as inputs
+		P1DIR &= ~0xFF;
+		P1REN |= 0xFF;
+		P1OUT &= ~0xFF;
+		// Set P2.0->P2.3 as Outputs
+		P2DIR |= 0xFF;
+		P2REN &= 0xFF;
+		P2OUT |= 0xFF;
+
+		// Enable P1.0->P1.3 Interrupts
+		P1IN &= ~0xFF;
+		P1IFG &= ~0xFF;
+		P2IFG &= ~0xFF; // Clear P2 IFG
+
+		P1IE &= ~0xFF;
+		break;
+
+	case 0: // This is used for when we want to get just a single input
+
+		Temp_In[0] = P1IN;
+		P6OUT |= BIT6;
+		// Switch to P1 as output, and P2 as input
+
+		// Set P1.0->P1.3 as Outputs
+		P1DIR |= 0xFF;
+		P1REN |= 0xFF;
+		P1OUT |= 0xFF;
+		// Set P2.0->P2.3 as Outputs
+		P2DIR &= ~0xFF;
+		P2REN |= 0xFF;
+		P2OUT &= ~0xFF;
+
+		P2IN &= ~0xFF;
+		P1IFG &= ~0xFF; // Clear P1 IFG
+
+		Temp_In[1] = P2IN;
+		// Rotate the upper nibble
+		Temp_In[0] = Temp_In[0] << 4;
+
+		Unlocked_Input = Temp_In[0] | Temp_In[1];
+
+		Passcode_Inputs[3] = 1;
+		// Switch to P1 as output, and P2 as input
+
+		// Set P1.0->P1.3 as inputs
+		P1DIR &= ~0xFF;
+		P1REN |= 0xFF;
+		P1OUT &= ~0xFF;
+		// Set P2.0->P2.3 as Outputs
+		P2DIR |= 0xFF;
+		P2REN &= 0xFF;
+		P2OUT |= 0xFF;
+
+		// Enable P1.0->P1.3 Interrupts
+		P1IN &= ~0xFF;
+		P1IFG &= ~0xFF;
+		P2IFG &= ~0xFF; // Clear P2 IFG
+
+		P1IE &= ~0xFF;
+		New_Input = 1;
+		break;
+
+	default:
+	}

@@ -60,6 +60,16 @@ int Test_Slave_Address = 0x048;
 
 */
 
+/* this section is the configuration of the Real Time Clock
+*/
+#define Starting_Seconds 0x00
+#define Starting_Minutes 0x00
+#define Starting_Hours   0x00
+#define Starting_Day     0x01 //This is 1-7 for the days of the week
+#define Starting_Data    0x01 
+#define Starting_Year    0x17 //This is 23 in hex
+char Set_Time[] = {0x00, Starting_Seconds, Starting_Minutes, Starting_Hours, Starting_Day, Starting_Data, Starting_Year}; //This will be removed later this is the start time for the RTC
+char *Set_Time_ptr = Set_Time;
 /*
 This section is the struct system for storing all the temperature values.
 */
@@ -163,6 +173,15 @@ int main(void)
 		-Collecting data from the peltier and analog sensor, the system will check if the value is
 			greater than or less than ambient then make the decision to heat or cool.
 	6. Add the I2C communication to the slaves to write out the current information.
+	*/
+
+	/*
+	TO-DO:
+		1. Impliment Mosfet control circuitirty and code
+		2. Reading RTC values and converting to ASCII
+		3. Reading LM92 Temperature data
+		4. Feedback controls
+		5. Add additional I2C Slave communication as needed. 
 	*/
 
 

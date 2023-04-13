@@ -45,7 +45,7 @@ void Setup_I2C_Module(void){
 
 void Send_I2C_Message(int Slave_Address, char* I2C_Message, int Size_of_Message){
     I2C_Message_Counter = 0;
-    UCB1TBCNT = 1; //Set the buffer size to the size of the input char* I2C_Message ie how many bytes to send via I2C
+    UCB1TBCNT = Size_of_Message; //Set the buffer size to the size of the input char* I2C_Message ie how many bytes to send via I2C
 
     strcpy(I2C_Message_Global, I2C_Message);
 
