@@ -26,6 +26,8 @@ char Decode_Input(int);
 // Global Variables needed for I2C communication
 int I2C_Message_Counter = 0; // Index value to count the position in the message being written out I2C
 char I2C_Message_Global[max_I2C_Length]; // Create an empty "string" to hold the final message as it is being sent out I2C
+int Data_In; 				//Used to count how long the input should be for the RTC or the LM92
+int temp_pos;				//Counter for the inputs
 
 // UART Function Prototypes
 void Setup_UART(void);
@@ -70,6 +72,42 @@ int Test_Slave_Address = 0x048;
 #define Starting_Year    0x17 //This is 23 in hex
 char Set_Time[] = {0x00, Starting_Seconds, Starting_Minutes, Starting_Hours, Starting_Day, Starting_Data, Starting_Year}; //This will be removed later this is the start time for the RTC
 char *Set_Time_ptr = Set_Time;
+
+/*
+RTC Struct and variables
+*/
+
+/*
+Creating a struct to hold the data read in from the RTC
+*/
+
+struct Time
+{
+	int seconds;
+	int minutes;
+	int hours;
+	int day;
+	int date;
+    int month;
+    int year;
+};
+
+struct Current_Time time;
+
+#define Seconds Current_Time.seconds
+#define Minutes Current_Time.minutes
+#define Hours Current_Time.hours
+#define Day Current_Time.day
+#define Date Current_Time.date
+#define Month Current_Time.month
+#define Year Current_Time.year
+
+int Current_Time_BCD[6] ={Seconds, Minutes, Hours, Day, Date, Month, Year};	//Create an array which contains structs
+//^This allows for the indexing of the Current_Time struct with an integer
+
+
+//End RTC
+
 /*
 This section is the struct system for storing all the temperature values.
 */
@@ -126,6 +164,9 @@ char Unlocked_ASCII[1];
 char *Unlocked_ASCII_ptr = Unlocked_ASCII;
 
 int Unlocked_Input;
+
+
+
 /*
 Final revision for the Project 4 code
 The goal of this was to create a completely stable version with the I2C bug fixed
