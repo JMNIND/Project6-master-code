@@ -7,11 +7,13 @@
 
 #define third_second_timer_period 333333
 
-#define LCD 0x048
+#define LCD 0x038
 #define LED 0x058
 #define RTC 0x068
 #define Temp_Sensor 0x012
 #define LM19_PIN BIT0	//Connected on pin 5.0
+
+
 
 #define Test_LED BIT6
 
@@ -20,14 +22,21 @@
 
 void Setup_I2C_Module(void);
 void Send_I2C_Message(int, char *, int);
+void Receive_I2C_Message(int , int);
 void Setup_Keypad_Ports(void);
 char Decode_Input(int);
+int Write_Mode = 0;
+
+float Read_Plant_Temperature();
+void Peltier_PID(float Current_Temperature, float Target_Temperature);
 
 // Global Variables needed for I2C communication
 int I2C_Message_Counter = 0; // Index value to count the position in the message being written out I2C
 char I2C_Message_Global[max_I2C_Length]; // Create an empty "string" to hold the final message as it is being sent out I2C
+char I2C_Message_Global_Receive[max_I2C_Length];
 int Data_In; 				//Used to count how long the input should be for the RTC or the LM92
 int temp_pos;				//Counter for the inputs
+int Data_Valid;
 
 // UART Function Prototypes
 void Setup_UART(void);
@@ -92,7 +101,7 @@ struct Time
     int year;
 };
 
-struct Current_Time time;
+//struct Current_Time time;
 
 #define Seconds Current_Time.seconds
 #define Minutes Current_Time.minutes
@@ -102,7 +111,7 @@ struct Current_Time time;
 #define Month Current_Time.month
 #define Year Current_Time.year
 
-int Current_Time_BCD[6] ={Seconds, Minutes, Hours, Day, Date, Month, Year};	//Create an array which contains structs
+//int Current_Time_BCD[6] ={Seconds, Minutes, Hours, Day, Date, Month, Year};	//Create an array which contains structs
 //^This allows for the indexing of the Current_Time struct with an integer
 
 
@@ -124,7 +133,7 @@ struct Temperature
 
 struct Temperature Temperature_Array[9];
 
-char Temperature_Write_Out[8];
+char Temperature_Write_Out[20];
 char *Temperature_Write_Out_ptr = Temperature_Write_Out;
 int Samples = 0;
 int New_Temp_Value;
@@ -133,7 +142,7 @@ float Rolling_Average;
 char Rolling_Average_ASCII[4];
 char *Rolling_Average_ASCII_ptr = Rolling_Average_ASCII;
 float Real_Analog_Value;
-int Sample_Size = 0;
+int Sample_Size = 3;
 int Rolling_Average_Unlocked = 0;
 int Raw_Temp = 0;
 
@@ -147,6 +156,7 @@ int Status = 1;
 char Input_Arr[3] = {0, 0, 0};
 int New_Input = 0;
 */
+int Fresh_Data = 0;
 
 // Keypad functions prototypes
 
@@ -165,6 +175,14 @@ char *Unlocked_ASCII_ptr = Unlocked_ASCII;
 
 int Unlocked_Input;
 
+// Here be stuff for the PID
+int Data_Valid;
+float Derivative;
+float Integral;
+float Previous_Error;
+float Previous_Temperature;
+float MIN_OUTPUT = 1.0;
+float Current_Temperature = 0.0;
 
 
 /*
@@ -184,7 +202,7 @@ int main(void)
 	P6DIR |= BIT6;
 	P6OUT &= ~BIT6;
 	*/
-	Set_RTC();
+	//Set_RTC();
 
 	// Need to create a simple I2C transmission protocol
 
@@ -201,6 +219,8 @@ int main(void)
 	// After setup don't forget to enable GPIO....
 	PM5CTL0 &= ~LOCKLPM5;
 	__enable_interrupt();
+
+	float Target_Temperature = 5.0;
 
 	/*
 	1. Get resolution from user
@@ -224,6 +244,20 @@ int main(void)
 		4. Feedback controls
 		5. Add additional I2C Slave communication as needed. 
 	*/
+	while(1){
+	int i;
+	Current_Temperature = Read_Plant_Temperature();
+
+	Peltier_PID(Current_Temperature, Target_Temperature);
+
+    for(i = 0; i<30000; i++){}// delay
+    for(i = 0; i<30000; i++){}// delay
+    Process_Temperature_Data(1);
+    for(i = 0; i<30000; i++){}// delay
+    for(i = 0; i<30000; i++){}// delay
+
+
+	}
 
 
 }
@@ -268,7 +302,7 @@ void Process_Temperature_Data(int New_Temp_Value)
 	New_Temp_Value = 0; // Move the new raw value into the struct then clear the new raw value
 	// Now to convert from mV to degrees C
 	Real_Analog_Value = Temperature_Array[Sample_Number].Raw_Value * 830e-6;
-	Temperature_Array[Sample_Number].Celsius_Float = Convert_to_Celsius(Real_Analog_Value);
+	Temperature_Array[Sample_Number].Celsius_Float = Current_Temperature;
 	int whole_num = (int)Temperature_Array[Sample_Number].Celsius_Float;
 	int frac_num = (int)((Temperature_Array[Sample_Number].Celsius_Float - whole_num) * 100); // multiply by 100 to get 2 decimal places
 
@@ -299,6 +333,7 @@ void Process_Temperature_Data(int New_Temp_Value)
     //Send_UART_Message(40);
 	if (Rolling_Average_Unlocked == 1)
 	{
+
 		// TODO add average here.... DONE??
 	    TB0CTL |= MC__STOP;                      //Put timer into stop mode, change after sample size collected
 
@@ -309,7 +344,7 @@ void Process_Temperature_Data(int New_Temp_Value)
 			Rolling_Average = Temperature_Array[i].Celsius_Float + Rolling_Average;
 		}
 
-		Rolling_Average = Rolling_Average / Sample_Size;
+		Rolling_Average = Current_Temperature;
 		int whole_num = (int)Rolling_Average;
 		int frac_num = (int)((Rolling_Average - whole_num) * 100); // multiply by 100 to get 2 decimal places
 		itoa(whole_num, buffer);
@@ -320,8 +355,9 @@ void Process_Temperature_Data(int New_Temp_Value)
 
 		// TODO create snprintf like below with average.
 		// snprintf(Temperature_Write_Out, 100, "%c%c.%c\n%c%c%c\n%c%c.%c\n", Temperature_Array[Sample_Number].Upper_Bit[0], Temperature_Array[Sample_Number].Upper_Bit[1], Temperature_Array[Sample_Number].Lower_Bit, Temperature_Array[Sample_Number].Kelvin[0], Temperature_Array[Sample_Number].Kelvin[1], Temperature_Array[Sample_Number].Kelvin[2], Rolling_Average_ASCII[0], Rolling_Average_ASCII[1], Rolling_Average_ASCII[2]);
-		snprintf(Temperature_Write_Out, 100, "%c%c.%c\n%c%c%c\n", Rolling_Average_ASCII[0], Rolling_Average_ASCII[1], Rolling_Average_ASCII[2], Temperature_Array[Sample_Number].Kelvin[0], Temperature_Array[Sample_Number].Kelvin[1], Temperature_Array[Sample_Number].Kelvin[2]);
-		Send_I2C_Message(0x048, Temperature_Write_Out_ptr, 8);
+		snprintf(Temperature_Write_Out, 100, "N%c%c.%cMTTT35.0", Rolling_Average_ASCII[0], Rolling_Average_ASCII[1], Rolling_Average_ASCII[2]);
+		//char *Temperature_Write_Out_ptr = Temperature_Write_Out;
+		Send_I2C_Message(0x038, Temperature_Write_Out_ptr, 13);
 		snprintf(UART_Message_Global, 100, "Current Average Temperature %c%c.%c %cC and %c%c%c %cK. \n\r", Rolling_Average_ASCII[0], Rolling_Average_ASCII[1], Rolling_Average_ASCII[2], 248, Temperature_Array[Sample_Number].Kelvin[0], Temperature_Array[Sample_Number].Kelvin[1], Temperature_Array[Sample_Number].Kelvin[2], 248);
 		Send_UART_Message(49);
 		// Increment sample number
@@ -347,6 +383,8 @@ float Convert_to_Celsius(float V0)
 	Celsius = -1481.6 + sqrt(2.1962e6 + ((1.8639 - V0) / (3.88e-6)));
 	return (Celsius);
 }
+
+
 
 #pragma vector = EUSCI_A1_VECTOR
 __interrupt void ISR_EUSCI_A1(void)
@@ -374,9 +412,19 @@ Interrupt Service Routines
 #pragma vector = EUSCI_B1_VECTOR
 __interrupt void EUSCI_B1_I2C_ISR(void)
 {
-	// Send I2C Message
-	UCB1TXBUF = I2C_Message_Global[I2C_Message_Counter]; // Send the next byte in the I2C_Message_Global string
-	I2C_Message_Counter++;								 // Increase the message position counter
+    if(Write_Mode == 1 )
+    {
+        // Send I2C Message
+        UCB1TXBUF = I2C_Message_Global[I2C_Message_Counter]; // Send the next byte in the I2C_Message_Global string
+        I2C_Message_Counter++;
+        // Increase the message position counter
+    }
+    else
+    {
+        // Receive I2C Message
+        I2C_Message_Global_Receive[I2C_Message_Counter] = UCB1RXBUF;//IT PUTS THE DATA IN THE BASKET
+        I2C_Message_Counter++;
+    }
 }
 
 // Keypad interrupt vector
